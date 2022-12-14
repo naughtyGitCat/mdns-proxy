@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"strings"
 
 	"github.com/akamensky/argparse"
 	"github.com/pkg/errors"
@@ -24,17 +25,21 @@ var debugFlag = cmdRootParser.Flag("", "debug", &argparse.Options{Default: false
 var versionFlag = cmdRootParser.Flag("", "version", &argparse.Options{})
 
 var runCmd = cmdRootParser.NewCommand("run", "run proxy")
+var runPortInt = runCmd.Int("p", "port", &argparse.Options{Required: false, Help: "expose dns service port", Default: 58})
+var runIPStr = runCmd.String("", "ip", &argparse.Options{Required: false, Help: "expose dns service ip", Default: "0.0.0.0"})
+
+var mDnsConn *mdns.Conn
 
 func main() {
 	var err = cmdRootParser.Parse(os.Args)
-	// 如果解析失败就打印用法
 	if err != nil {
 		fmt.Println(cmdRootParser.Usage(err))
 		return
 	}
 
-	// debug输出
+	// log output
 	if *debugFlag {
+		log.SetReportCaller(true)
 		log.SetLevel(log.DebugLevel)
 	} else {
 		log.SetLevel(log.InfoLevel)
@@ -49,24 +54,45 @@ func main() {
 		log.Infof("commit hash: %s\n", CommitHash)
 		return
 	}
+
+	if runCmd.Happened() {
+		err := initMDnsConn()
+		if err != nil {
+			log.Panic(err)
+		}
+		dns.HandleFunc(".", handler)
+		exposedURL := fmt.Sprintf("%s:%d", *runIPStr, *runPortInt)
+		err = dns.ListenAndServe(exposedURL, "udp", nil)
+		if err != nil {
+			log.Panic(err)
+		}
+	}
 }
 
-func resolveMDnsHostname(hostname string) (string, error) {
+func initMDnsConn() error {
 	addr, err := net.ResolveUDPAddr("udp", mdns.DefaultAddress)
 	if err != nil {
-		return "", errors.Wrapf(err, "resolve udp addr %s failed ", mdns.DefaultAddress)
+		return errors.Wrapf(err, "resolve udp addr %s failed ", mdns.DefaultAddress)
 	}
 
 	l, err := net.ListenUDP("udp4", addr)
 	if err != nil {
-		return "", errors.Wrapf(err, "listen to udp4 %s failed ", addr)
+		return errors.Wrapf(err, "listen to udp4 %s failed ", addr)
 	}
 
-	server, err := mdns.Server(ipv4.NewPacketConn(l), &mdns.Config{})
+	mDnsConn, err = mdns.Server(ipv4.NewPacketConn(l), &mdns.Config{})
 	if err != nil {
-		return "", errors.Wrap(err, "init mdns server failed ")
+		return errors.Wrap(err, "init mdns server failed ")
 	}
-	answer, src, err := server.Query(context.TODO(), hostname)
+	return nil
+}
+
+// resolveMDnsHostname
+// https://github.com/pion/mdns/blob/master/examples/query/main.go
+func resolveMDnsHostname(hostname string) (string, error) {
+	hostname = strings.TrimSuffix(hostname, ".")
+	log.Debugf("now resolve hostname %s via mdns", hostname)
+	answer, src, err := mDnsConn.Query(context.TODO(), hostname)
 	log.Debugf("mdns query answer: %v", answer.GoString())
 	if err != nil {
 		return "", errors.Wrap(err, "query mdns failed ")
@@ -75,14 +101,22 @@ func resolveMDnsHostname(hostname string) (string, error) {
 	// fmt.Printf("src: %s\n", src.(*net.UDPAddr).IP.String())
 	// fmt.Printf("err: %s\n", err)
 
+	// https://stackoverflow.com/questions/50428176/how-to-get-ip-and-port-from-net-addr-when-it-could-be-a-net-udpaddr-or-net-tcpad
 	return src.(*net.UDPAddr).IP.String(), nil
 }
 
 func handler(writer dns.ResponseWriter, req *dns.Msg) {
-	log.Debug("now handle dns request, %v", req)
+	log.Debugf("now handle dns request: \n %v\n", req)
 	var resp dns.Msg
 	resp.SetReply(req)
 	for _, question := range req.Question {
+		log.Debugf("now handle dns question, %+v", question)
+		hostIP, err := resolveMDnsHostname(question.Name)
+		if err != nil {
+			log.Errorf("resolve mdns hostname failed, %s", err)
+			return
+		}
+		log.Debugf("resolved mdns hostname %s to %s", question.Name, hostIP)
 		recordA := dns.A{
 			Hdr: dns.RR_Header{
 				Name:   question.Name,
@@ -90,12 +124,13 @@ func handler(writer dns.ResponseWriter, req *dns.Msg) {
 				Class:  dns.ClassINET,
 				Ttl:    0,
 			},
-			A: net.ParseIP("127.0.0.1"),
+			A: net.ParseIP(hostIP),
 		}
 		resp.Answer = append(resp.Answer, &recordA)
 	}
 	err := writer.WriteMsg(&resp)
 	if err != nil {
+		log.Errorf("write response failed, %s", err)
 		return
 	}
 }
