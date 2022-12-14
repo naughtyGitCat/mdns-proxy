@@ -15,6 +15,7 @@ jobs:
       # ...
       - name: "Build & test"
         run: |
+          sh build.sh
           echo "done!"
 
       - uses: "marvinpinto/action-automatic-releases@latest"
