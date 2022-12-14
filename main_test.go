@@ -7,10 +7,11 @@ package main
 import (
 	"context"
 	"fmt"
-	"github.com/pion/mdns"
-	"golang.org/x/net/ipv4"
 	"net"
 	"testing"
+
+	"github.com/pion/mdns"
+	"golang.org/x/net/ipv4"
 )
 
 func TestMDns(t *testing.T) {
@@ -29,7 +30,7 @@ func TestMDns(t *testing.T) {
 		panic(err)
 	}
 	answer, src, err := server.Query(context.TODO(), "pve.local")
-	fmt.Println(answer)
-	fmt.Println(src)
-	fmt.Println(err)
+	fmt.Printf("answer: %s\n", answer.GoString())
+	fmt.Printf("src: %s\n", src.(*net.UDPAddr).IP.String())
+	fmt.Printf("err: %s\n", err)
 }
