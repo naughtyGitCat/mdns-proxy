@@ -25,7 +25,7 @@ var debugFlag = cmdRootParser.Flag("", "debug", &argparse.Options{Default: false
 var versionFlag = cmdRootParser.Flag("", "version", &argparse.Options{})
 
 var runCmd = cmdRootParser.NewCommand("run", "run proxy")
-var runPortInt = runCmd.Int("p", "port", &argparse.Options{Required: false, Help: "expose dns service port", Default: 58})
+var runPortInt = runCmd.Int("p", "port", &argparse.Options{Required: false, Help: "expose dns service port", Default: 53})
 var runIPStr = runCmd.String("", "ip", &argparse.Options{Required: false, Help: "expose dns service ip", Default: "0.0.0.0"})
 
 var mDnsConn *mdns.Conn
