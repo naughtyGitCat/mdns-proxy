@@ -22,7 +22,7 @@ jobs:
       # ...
       - name: "Build & test"
         run: |
-          mv mdns-proxy mdns-proxy.linux-amd64
+          cp mdns-proxy mdns-proxy.linux-amd64
 
       - uses: "marvinpinto/action-automatic-releases@latest"
         with:
@@ -30,4 +30,4 @@ jobs:
           prerelease: false
           files: |
             LICENSE
-            mdns-proxy
+            mdns-proxy.linux-amd64
