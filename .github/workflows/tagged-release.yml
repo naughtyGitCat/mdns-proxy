@@ -12,11 +12,17 @@ jobs:
     runs-on: "ubuntu-latest"
 
     steps:
+      - uses: actions/checkout@v3
+      - name: set up go
+        uses: actions/setup-go@v3
+        with:
+          go-version: 1.18
+      - name: build
+        run: sh build.sh
       # ...
       - name: "Build & test"
         run: |
-          sh build.sh
-          echo "done!"
+          mv mdns-proxy mdns-proxy.linux-amd64
 
       - uses: "marvinpinto/action-automatic-releases@latest"
         with:
