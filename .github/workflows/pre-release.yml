@@ -18,12 +18,25 @@ jobs:
           go-version: 1.18
       - name: build
         run: sh build.sh
+      - name: upload
+        uses: actions/upload-artifact@v3
+        with:
+          name: dist
+          path: |
+            mdns-proxy
 
   pre-release:
     name: "Pre Release"
     runs-on: "ubuntu-latest"
 
     steps:
+      - uses: actions/checkout@v3
+      - name: set up go
+        uses: actions/setup-go@v3
+        with:
+          go-version: 1.18
+      - name: build
+        run: sh build.sh
       # ...
       - name: "Build & test"
         run: |
